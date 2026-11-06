@@ -86,11 +86,42 @@ stages:
             displayName: 'Publicar Cobertura en Azure DevOps'
 
   # ==========================================
-  # STAGE 2: APROBACIÓN MANUAL (APPROVAL)
+  # STAGE 2: VALIDACIÓN DEL PROYECTO (VALIDATION)
+  # ==========================================
+  - stage: Validation
+    displayName: 'Validación'
+    dependsOn: CI
+    condition: succeeded()
+    jobs:
+      - job: validate_files
+        displayName: 'Validar archivos del despliegue'
+        steps:
+          - script: |
+              set -e
+
+              echo "Verificando archivos requeridos..."
+
+              test -f gradlew
+              test -f helm/build-config.yaml
+              test -f helm/dev.yml
+              test -f helm/service.yaml
+              test -f helm/route.yaml
+
+              echo "Validando permisos del Gradle Wrapper..."
+              test -x gradlew || chmod +x gradlew
+
+              echo "Validando sintaxis básica de Gradle..."
+              ./gradlew tasks --no-daemon
+
+              echo "Validación completada correctamente."
+            displayName: 'Validar estructura y configuración'
+
+  # ==========================================
+  # STAGE 3: APROBACIÓN MANUAL (APPROVAL)
   # ==========================================
   - stage: Approval
     displayName: 'Aprobar'
-    dependsOn: CI
+    dependsOn: Validation
     condition: succeeded()
     jobs:
       - job: manual_gate
@@ -104,7 +135,7 @@ stages:
               onTimeout: 'reject'
 
   # ==========================================
-  # STAGE 3: DESPLIEGUE CONTINUO (CD)
+  # STAGE 4: DESPLIEGUE CONTINUO (CD)
   # ==========================================
   - stage: CD
     displayName: 'CD'
@@ -146,11 +177,11 @@ stages:
             displayName: 'Descarga CLI, Login y Despliegue Docker'
 
   # ==========================================
-  # STAGE 4: NOTIFICACIONES (NOTIFICATIONS)
+  # STAGE 5: NOTIFICACIONES (NOTIFICATIONS)
   # ==========================================
   - stage: Notifications
     displayName: 'Notificar'
-    dependsOn: [CI, Approval, CD]
+    dependsOn: [CI, Validation, Approval, CD]
     condition: always()
     jobs:
       - job: send_status_email
